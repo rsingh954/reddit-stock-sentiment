@@ -7,82 +7,92 @@ import r from "../../API/snoowrap";
 import { GET_POSTS, SET_POSTS } from "../types";
 
 const RedditState = (props) => {
+  const RAPID_API_KEY = process.env.REACT_APP_RAPID_API_KEY;
   const initialState = {
     posts: [],
-    sentiments: [],
     loading: true,
   };
   const [state, dispatch] = useReducer(RedditReducer, initialState);
 
+  class Post {
+    constructor(id, title, upvotes, comment_count, sentiment, upvote_ratio) {
+      this.id = id;
+      this.title = title;
+      this.upvotes = upvotes;
+      this.comment_count = comment_count;
+      this.sentiment = sentiment;
+      this.upvote_ratio = upvote_ratio;
+    }
+  }
 
   const alphaOnlyReview = (string) => {
     if (string === undefined || string === null) return "AYE";
     return string.replace(/[^a-zA-Z\s]+/g, "");
   };
-  const option = (text, id) => {
-    return {
-      method: "POST",
-      url: "https://text-analysis12.p.rapidapi.com/sentiment-analysis/api/v1.1",
-      headers: {
-        "content-type": "application/json",
-        "x-rapidapi-host": "text-analysis12.p.rapidapi.com",
-        "x-rapidapi-key": process.env.REACT_APP_RAPID_API_KEY,
-      },
-      data: {
-        language: "english",
-        text: `${text}`,
-        id: `${id}`,
-      },
-    };
+
+  const fetchPosts = async () => {
+    return await r
+      .getSubreddit("stocks")
+      .getHot()
+      .then((a) => a.filter((b) => b.stickied === false))
+      .catch((err) => console.error(err));
   };
 
-const getSentiment = async (options, id) => {
-  return await axios.request(options).catch((err) => console.error(err));
-}
+  const getSentiment = async (text, id) => {
+    return await axios
+      .request({
+        method: "POST",
+        url: "https://text-analysis12.p.rapidapi.com/sentiment-analysis/api/v1.1",
+        headers: {
+          "content-type": "application/json",
+          "x-rapidapi-host": "text-analysis12.p.rapidapi.com",
+          "x-rapidapi-key": RAPID_API_KEY,
+        },
+        data: {
+          language: "english",
+          text: `${text}`,
+          id: `${id}`,
+        },
+      })
+      .catch((err) => console.error(err));
+  };
 
-const fetchPosts = async () => {
-  return await r
-  .getSubreddit("stocks")
-  .getHot()
-  .then((a) => a.filter((b) => b.stickied === false));
-}
-function Post(id, title, upvotes, comment_count, sentiment){
-  this.id = id
-  this.title =title
-  this.upvotes = upvotes
-  this.comment_count = comment_count
-  this.sentiment = sentiment
-}
-const retrieveSentiment = async (array) => {
-  const postArray = [];
-  
-  for (const post of array) {
-    const options = option(alphaOnlyReview(post.title), post.id);
-    const res = await getSentiment(options, post.id);
-    const getSentimentObject = await res.data
-    let sentiments = await getSentimentObject.sentiment;
-    const title = alphaOnlyReview(post.title)
-    const postObj = new Post( post.id, title,post.score,post.num_comments, sentiments)
-    postArray.push(postObj)
-  }
-  return postArray
-}
-  const getPosts = async () => { 
-    console.log("one")
-    const posts = await fetchPosts()
-    let postMaybe = await retrieveSentiment(posts)
+  const retrievePostWithSentiment = async (array = []) => {
+    const posts = [];
+    for (const post of array) {
+      const title = alphaOnlyReview(post.title);
+      const response = await getSentiment(title, post.id);
+      if (response.status !== 200) return { error: `${response.statusText}` };
 
-        dispatch({
-          type: GET_POSTS,
-          payload: postMaybe,
-        });
+      const data = response.data;
+      let sentiment = await data.sentiment;
+      const postObj = new Post(
+        post.id,
+        title,
+        post.score,
+        post.num_comments,
+        sentiment,
+        post.upvote_ratio
+      );
+      posts.push(postObj);
+    }
+    return posts;
+  };
+  const getPosts = async () => {
+    const posts = await fetchPosts();
+    let postWithSentiment = await retrievePostWithSentiment(posts);
+
+    dispatch({
+      type: GET_POSTS,
+      payload: postWithSentiment,
+    });
+    return postWithSentiment;
   };
 
   return (
     <RedditContext.Provider
       value={{
         posts: state.posts,
-        sentiments: state.sentiments,
         loading: state.loading,
         getPosts,
       }}

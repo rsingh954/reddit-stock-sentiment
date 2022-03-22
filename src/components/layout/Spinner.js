@@ -1,12 +1,16 @@
-import React, {Fragment} from 'react';
-import spinner from './akademiks-stream.gif'
+import spinner from "../assets/spinner.gif";
 
-export const Spinner = () => {
+export function Spinner() {
   return (
-    <Fragment>
-      <img src={spinner} alt="Loading..." style={{ width: '200px', margin: 'auto', display:'block' }} />
-    </Fragment>
-  )
-};
+    <div className="w-100 mt-20">
+      <img
+        width={180}
+        className="text-center mx-auto"
+        src={spinner}
+        alt="Loading..."
+      />
+    </div>
+  );
+}
 
-export default Spinner
+export default Spinner;
